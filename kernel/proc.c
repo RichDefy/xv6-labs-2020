@@ -152,13 +152,18 @@ freeproc(struct proc *p)
   if(p->trapframe)
     kfree((void*)p->trapframe);
   p->trapframe = 0;
+
+  // free kstack
+  pte_t *pte = walk(p->kernelpgtbl, p->kstack, 0);
+  if(pte == 0)
+    panic("freeproc: free kstack");
+  kfree((void*)PTE2PA(*pte));
+  p->kstack = 0;
+
   if(p->pagetable)
     proc_freepagetable(p->pagetable, p->sz);
-  if(p->kernelpgtbl){
+  if(p->kernelpgtbl)
     proc_freewalk(p->kernelpgtbl);
-  }
-  p->kernelpgtbl = 0;
-  p->kstack = 0;
   p->pagetable = 0;
   p->sz = 0;
   p->pid = 0;
@@ -169,6 +174,8 @@ freeproc(struct proc *p)
   p->xstate = 0;
   p->state = UNUSED;
 }
+
+
 
 // Create a user page table for a given process,
 // with no user memory, but with trampoline pages.
