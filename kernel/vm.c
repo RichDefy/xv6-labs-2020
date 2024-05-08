@@ -5,6 +5,8 @@
 #include "riscv.h"
 #include "defs.h"
 #include "fs.h"
+#include "spinlock.h"
+#include "proc.h"
 
 /*
  * the kernel's page table.
@@ -132,7 +134,7 @@ kvmpa(uint64 va)
   pte_t *pte;
   uint64 pa;
   
-  pte = walk(kernel_pagetable, va, 0);
+  pte = walk(myproc()->kernelpgtbl, va, 0);
   if(pte == 0)
     panic("kvmpa");
   if((*pte & PTE_V) == 0)
@@ -289,6 +291,20 @@ freewalk(pagetable_t pagetable)
   kfree((void*)pagetable);
 }
 
+void
+proc_freewalk(pagetable_t pagetable)
+{
+  // there are 2^9 = 512 PTEs in a page table.
+  for(int i = 0; i < 512; i++){ //递归遍历所有页
+    pte_t pte = pagetable[i];
+    if((pte & PTE_V) && (pte & (PTE_R|PTE_W|PTE_X)) == 0){
+        uint64 child = PTE2PA(pte);
+        pagetable[i] = 0; //清空
+        proc_freewalk((pagetable_t)child);
+    }
+  }
+  kfree((void*)pagetable);
+}
 // Free user memory pages,
 // then free page-table pages.
 void
@@ -466,4 +482,43 @@ vmprint(pagetable_t pagetable, int flag)
       }
     }
   }
+}
+
+pagetable_t
+proc_pgtbl_kvminit(void)
+{
+  pagetable_t  kpgtbl;
+  kpgtbl = (pagetable_t) kalloc();
+  memset(kpgtbl, 0, PGSIZE);
+
+  // uart registers
+  proc_kvmmap(kpgtbl, UART0, UART0, PGSIZE, PTE_R | PTE_W);
+
+  // virtio mmio disk interface
+  proc_kvmmap(kpgtbl, VIRTIO0, VIRTIO0, PGSIZE, PTE_R | PTE_W);
+
+  // CLINT
+  proc_kvmmap(kpgtbl, CLINT, CLINT, 0x10000, PTE_R | PTE_W);
+
+  // PLIC
+  proc_kvmmap(kpgtbl, PLIC, PLIC, 0x400000, PTE_R | PTE_W);
+
+  // map kernel text executable and read-only.
+  proc_kvmmap(kpgtbl, KERNBASE, KERNBASE, (uint64)etext-KERNBASE, PTE_R | PTE_X);
+
+  // map kernel data and the physical RAM we'll make use of.
+  proc_kvmmap(kpgtbl, (uint64)etext, (uint64)etext, PHYSTOP-(uint64)etext, PTE_R | PTE_W);
+
+  // map the trampoline for trap entry/exit to
+  // the highest virtual address in the kernel.
+  proc_kvmmap(kpgtbl, TRAMPOLINE, (uint64)trampoline, PGSIZE, PTE_R | PTE_X);
+
+  return kpgtbl;
+}
+
+void
+proc_kvmmap(pagetable_t kpgtbl, uint64 va, uint64 pa, uint64 sz, int perm)
+{
+  if(mappages(kpgtbl, va, sz, pa, perm) != 0)
+    panic("proc_kvmmap");
 }
