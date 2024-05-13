@@ -155,6 +155,8 @@ freeproc(struct proc *p)
 
   // free kstack
   pte_t *pte = walk(p->kernelpgtbl, p->kstack, 0);
+  // printf("pte:%p\n", pte);
+
   if(pte == 0)
     panic("freeproc: free kstack");
   kfree((void*)PTE2PA(*pte));
@@ -245,7 +247,7 @@ userinit(void)
   // and data into it.
   uvminit(p->pagetable, initcode, sizeof(initcode));
   p->sz = PGSIZE;
-
+  u2kvmcopy(p->pagetable, p->kernelpgtbl, 0, p->sz);
   // prepare for the very first "return" from kernel to user.
   p->trapframe->epc = 0;      // user program counter
   p->trapframe->sp = PGSIZE;  // user stack pointer
@@ -268,9 +270,13 @@ growproc(int n)
 
   sz = p->sz;
   if(n > 0){
+    if(PGROUNDUP(sz + n) >= PLIC){
+      return -1;
+    }
     if((sz = uvmalloc(p->pagetable, sz, sz + n)) == 0) {
       return -1;
     }
+    u2kvmcopy(p->pagetable, p->kernelpgtbl, sz - n, sz);
   } else if(n < 0){
     sz = uvmdealloc(p->pagetable, sz, sz + n);
   }
@@ -301,7 +307,7 @@ fork(void)
   np->sz = p->sz;
 
   np->parent = p;
-
+  u2kvmcopy(np->pagetable, np->kernelpgtbl, 0, np->sz);
   // copy saved user registers.
   *(np->trapframe) = *(p->trapframe);
 
