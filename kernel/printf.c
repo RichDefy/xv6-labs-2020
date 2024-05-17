@@ -132,3 +132,17 @@ printfinit(void)
   initlock(&pr.lock, "pr");
   pr.locking = 1;
 }
+
+void backtrace(void)
+{
+  printf("backtrace:\n");
+  uint64 add = r_fp();
+  uint64 *fp = (uint64*) add;
+  uint64 down = PGROUNDDOWN(add);
+  uint64 up = PGROUNDUP(add);
+  while(add < up && add > down){
+    printf("%p\n", fp[-1]);
+    add = fp[-2];
+    fp = (uint64*) add;
+  }
+}
