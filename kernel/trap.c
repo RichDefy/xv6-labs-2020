@@ -70,16 +70,29 @@ usertrap(void)
   } 
   else if(r_scause() == 15 || r_scause() == 13){
     uint64 fault_va = r_stval();
-    fault_va = PGROUNDDOWN(fault_va);
-    char* mem = kalloc();
-    memset(mem, 0, PGSIZE);
-    // mappages(p->pagetable, fault_va, PGSIZE, (uint64)mem, PTE_W|PTE_X|PTE_R|PTE_U);
-    if(mappages(p->pagetable, fault_va, PGSIZE, (uint64)mem, PTE_W|PTE_X|PTE_R|PTE_U) != 0){
-      kfree(mem);
-      uvmdealloc(p->pagetable, fault_va, fault_va);
-      // p->killed = 1;
+    // if(fault_va > p->sz){
+    //   p->killed = 1;
+    // }
+    // fault_va = PGROUNDDOWN(fault_va);
+    // char* mem = kalloc();
+    // if(mem == 0){
+    //   p->killed = 1;
+    // }
+    // memset(mem, 0, PGSIZE);
+    // if(mappages(p->pagetable, fault_va, PGSIZE, (uint64)mem, PTE_W|PTE_X|PTE_R|PTE_U) != 0){
+    //   kfree(mem);
+    //   uvmdealloc(p->pagetable, fault_va, fault_va);
+    //   p->killed = 1;
+    // }
+    if(is_lazy_alloc_va(fault_va)){
+      if(lazy_alloc(fault_va) < 0){
+        p->killed = 1;
+      }
     }
-  }else {
+    else{
+      p->killed = 1;
+    }
+  } else {
     printf("usertrap(): unexpected scause %p pid=%d\n", r_scause(), p->pid);
     printf("            sepc=%p stval=%p\n", r_sepc(), r_stval());
     p->killed = 1;
