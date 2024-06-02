@@ -63,6 +63,9 @@ void            ramdiskrw(struct buf*);
 void*           kalloc(void);
 void            kfree(void *);
 void            kinit(void);
+void            krefpage(void *);
+void            *kcopy_n_deref(void *);
+// #define MAX_PAGES 32768
 
 // log.c
 void            initlog(int, struct superblock*);
