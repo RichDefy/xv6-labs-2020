@@ -21,4 +21,5 @@ struct buf {
   uint lastuse;
   struct buf *next;
   uchar data[BSIZE];
+  uint timestamp;
 };
